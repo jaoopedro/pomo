@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Pomodoro Focus</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    /* ===============================
+       🎨 THEME
+    =============================== */
+    :root {
+      --bg: #0b0f1a;
+      --card: rgba(255, 255, 255, 0.08);
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --accent: #22d3ee;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f4f6fb;
+        --card: rgba(255, 255, 255, 0.9);
+        --text: #111827;
+        --muted: #6b7280;
+        --accent: #0ea5e9;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: "Segoe UI", system-ui, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      height: 100vh;
+      background: radial-gradient(circle at top, #1f2933, var(--bg));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text);
+    }
+
+    /* ===============================
+       ⏱️ POMODORO CARD
+    =============================== */
+    .container {
+      display: flex;
+      gap: 20px;
+      padding: 20px;
+      max-width: 900px;
+      width: 100%;
+    }
+
+    .pomodoro {
+      background: var(--card);
+      backdrop-filter: blur(14px);
+      border-radius: 20px;
+      padding: 30px;
+      width: 320px;
+      text-align: center;
+      box-shadow: 0 0 40px rgba(34, 211, 238, 0.15);
+    }
+
+    h1 {
+      color: var(--accent);
+      margin-bottom: 20px;
+    }
+
+    .timer {
+      font-size: 3rem;
+      font-weight: bold;
+      margin: 20px 0;
+    }
+
+    .modes {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .modes button {
+      flex: 1;
+      padding: 8px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .modes button.active {
+      border-color: var(--accent);
+      color: var(--text);
+      box-shadow: 0 0 10px rgba(34,211,238,.4);
+    }
+
+    .control button {
+      width: 100%;
+      padding: 12px;
+      margin-bottom: 10px;
+      border-radius: 12px;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .primary {
+      background: linear-gradient(135deg, var(--accent), #0284c7);
+      color: #000;
+    }
+
+    .secondary {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,.2);
+      color: var(--muted);
+    }
+
+    .status {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin-top: 10px;
+    }
+
+    /* ===============================
+       📝 NOTES
+    =============================== */
+    .notes {
+      background: var(--card);
+      backdrop-filter: blur(14px);
+      border-radius: 20px;
+      padding: 20px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .notes h2 {
+      margin-bottom: 10px;
+      color: var(--accent);
+    }
+
+    .notes textarea {
+      flex: 1;
+      resize: none;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-size: 1rem;
+    }
+
+    .notes small {
+      color: var(--muted);
+      margin-top: 10px;
+    }
+
+    /* ===============================
+       📱 MOBILE
+    =============================== */
+    @media (max-width: 768px) {
+      body {
+        align-items: flex-start;
+      }
+
+      .container {
+        flex-direction: column;
+        padding-bottom: 80px;
+      }
+
+      .notes {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 40vh;
+        border-radius: 20px 20px 0 0;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+  <!-- Pomodoro -->
+  <div class="pomodoro">
+    <h1>Pomodoro</h1>
+
+    <div class="modes">
+      <button class="active" onclick="setMode(15, this)">15m</button>
+      <button onclick="setMode(25, this)">25m</button>
+      <button onclick="setMode(50, this)">50m</button>
+    </div>
+
+    <div class="timer" id="timer">25:00</div>
+
+    <div class="control">
+      <button class="primary" id="controlBtn" onclick="togglePomodoro()">Iniciar</button>
+      <button class="secondary" onclick="resetPomodoro()">Resetar</button>
+      <button class="secondary" onclick="toggleMute()" id="muteBtn">🔊 Som ligado</button>
+    </div>
+
+    <div class="status" id="status">Pronto para focar</div>
+  </div>
+
+  <!-- Notes -->
+  <div class="notes">
+    <h2>Anotações</h2>
+    <textarea id="notes" placeholder="Escreva aqui o que quiser estudar depois..."></textarea>
+    <small>Salvo automaticamente no navegador</small>
+  </div>
+</div>
+
+<!-- 🎵 Música -->
+<audio id="bgMusic" loop>
+  <source src="./musica/lofi.mp3" type="audio/mpeg">
+</audio>
+
+<script>
+  /* ===============================
+     ⏱️ POMODORO LOGIC
+  =============================== */
+  let focusTime = 25 * 60;
+  let seconds = focusTime;
+  let interval = null;
+  let running = false;
+  let muted = false;
+
+  const timerEl = document.getElementById("timer");
+  const controlBtn = document.getElementById("controlBtn");
+  const statusText = document.getElementById("status");
+  const music = document.getElementById("bgMusic");
+  const muteBtn = document.getElementById("muteBtn");
+
+  music.volume = 0.4;
+
+  function updateTimer() {
+    const min = String(Math.floor(seconds / 60)).padStart(2, "0");
+    const sec = String(seconds % 60).padStart(2, "0");
+    timerEl.textContent = `${min}:${sec}`;
+  }
+
+  function togglePomodoro() {
+    if (!running) {
+      running = true;
+      controlBtn.innerText = "Pausar";
+      statusText.innerText = "Foco em andamento";
+      if (!muted) music.play();
+
+      interval = setInterval(() => {
+        if (seconds > 0) {
+          seconds--;
+          updateTimer();
+        } else {
+          resetPomodoro();
+          statusText.innerText = "Tempo finalizado";
+        }
+      }, 1000);
+    } else {
+      running = false;
+      clearInterval(interval);
+      controlBtn.innerText = "Iniciar";
+      statusText.innerText = "Pausado";
+      music.pause();
+    }
+  }
+
+  function resetPomodoro() {
+    clearInterval(interval);
+    running = false;
+    seconds = focusTime;
+    updateTimer();
+    controlBtn.innerText = "Iniciar";
+    music.pause();
+    music.currentTime = 0;
+  }
+
+  function setMode(minutes, button) {
+    focusTime = minutes * 60;
+    resetPomodoro();
+    document.querySelectorAll(".modes button").forEach(b => b.classList.remove("active"));
+    button.classList.add("active");
+  }
+
+  function toggleMute() {
+    muted = !muted;
+    music.muted = muted;
+    muteBtn.innerText = muted ? "🔇 Som desligado" : "🔊 Som ligado";
+  }
+
+  updateTimer();
+
+  /* ===============================
+     📝 NOTES STORAGE
+  =============================== */
+  const notes = document.getElementById("notes");
+  notes.value = localStorage.getItem("pomodoro-notes") || "";
+
+  notes.addEventListener("input", () => {
+    localStorage.setItem("pomodoro-notes", notes.value);
+  });
+</script>
+
+</body>
+</html>
